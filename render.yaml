@@ -7,11 +7,7 @@ services:
     startCommand: node server.js
     healthCheckPath: /healthz
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: HOST
         value: 0.0.0.0
       - key: CRYPTO_USER
         value: trader
-      - key: CRYPTO_PASSWORD
-        sync: false
