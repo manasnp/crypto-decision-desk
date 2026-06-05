@@ -15,15 +15,13 @@ https://github.com/manasnp/crypto-decision-desk
 1. Open Render.
 2. Choose **New > Blueprint**.
 3. Select the GitHub repo.
-4. Add this secret environment variable:
-   - `CRYPTO_PASSWORD`: a long private password
-5. Deploy.
+4. Deploy.
 
-The username defaults to `trader`.
+No password is required unless you set `CRYPTO_PASSWORD` yourself.
 
 ## Notes
 
 - Render reads `render.yaml`.
 - The app exposes `/healthz` for hosting health checks.
-- Production mode refuses to start without `CRYPTO_PASSWORD`.
+- Password protection is optional. Set `CRYPTO_PASSWORD` only if you want a login prompt.
 - This is educational decision support, not financial advice.
