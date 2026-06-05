@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Crypto Decision Desk</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Daily crypto intelligence</p>
+          <h1>Crypto Decision Desk</h1>
+        </div>
+        <div class="controls">
+          <label for="assetSelect">Asset</label>
+          <select id="assetSelect">
+            <option selected>XRP</option>
+            <option>BTC</option>
+            <option>ETH</option>
+            <option>SOL</option>
+            <option>ADA</option>
+          </select>
+          <button id="refreshBtn" type="button" title="Refresh market and news data">Refresh</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="lead-panel">
+          <div class="asset-line">
+            <img id="assetIcon" alt="" width="42" height="42">
+            <div>
+              <p id="assetName" class="asset-name">Loading</p>
+              <p id="lastUpdated" class="muted">Fetching latest market and news data</p>
+            </div>
+          </div>
+          <div class="price-row">
+            <strong id="assetPrice">$0.00</strong>
+            <span id="assetChange" class="pill neutral">0.00%</span>
+          </div>
+          <canvas id="sparkline" width="640" height="160" aria-label="Seven day price sparkline"></canvas>
+        </div>
+
+        <aside class="decision-panel">
+          <p class="section-kicker">Decision lens</p>
+          <h2 id="stance">Wait</h2>
+          <p id="setup" class="setup">No high-conviction setup</p>
+          <p id="reason" class="muted"></p>
+          <div class="invalidation">
+            <span>Invalidation</span>
+            <p id="invalidation"></p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="market-grid" id="marketGrid" aria-label="Watchlist"></section>
+
+      <section class="content-grid">
+        <section class="drivers">
+          <div class="section-head">
+            <p class="section-kicker">What is affecting it</p>
+            <h2>Current drivers</h2>
+          </div>
+          <div id="driversList" class="driver-list"></div>
+        </section>
+
+        <section class="news">
+          <div class="section-head">
+            <p class="section-kicker">Latest headlines</p>
+            <h2 id="newsTitle">XRP news</h2>
+          </div>
+          <div id="newsList" class="news-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
