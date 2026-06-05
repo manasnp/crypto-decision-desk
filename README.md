@@ -16,13 +16,13 @@ If that port is busy, run:
 PORT=4174 node server.js
 ```
 
-## Run with a password
+## Optional password
 
 ```bash
 CRYPTO_USER=trader CRYPTO_PASSWORD=your-long-password node server.js
 ```
 
-The production deployment requires `CRYPTO_PASSWORD`. Your browser will show a standard username/password prompt.
+If `CRYPTO_PASSWORD` is set, your browser will show a standard username/password prompt. If it is not set, the dashboard is open to anyone who has the URL.
 
 ## Deploy for phone access anywhere
 
@@ -30,14 +30,9 @@ The project includes `render.yaml`, so Render can deploy it directly from GitHub
 
 1. Create a GitHub repo and push this folder.
 2. In Render, choose **New > Blueprint** and select that repo.
-3. Set the required environment variable:
-   - `CRYPTO_PASSWORD`: a long private password
-4. Deploy.
+3. Deploy.
 
-Render will give you a public `https://...onrender.com` URL that works from your phone anywhere. Use:
-
-- Username: `trader`
-- Password: whatever you set as `CRYPTO_PASSWORD`
+Render will give you a public `https://...onrender.com` URL that works from your phone anywhere.
 
 ## What it does
 
