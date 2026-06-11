@@ -38,6 +38,8 @@ Render will give you a public `https://...onrender.com` URL that works from your
 
 - Pulls live market data from CoinGecko.
 - Pulls crypto headlines from CryptoCompare and several public RSS feeds.
+- Tracks official Ripple Insights posts.
+- Tracks XRP/Ripple catalyst searches for enterprise payment news, including Mastercard/Ripple, partnership, contract, stablecoin, custody, tokenization, and XRPL infrastructure headlines.
 - Highlights likely drivers affecting the selected asset.
 - Produces a simple decision lens: momentum, defensive, high-risk, or wait.
 
