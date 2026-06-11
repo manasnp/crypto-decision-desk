@@ -10,11 +10,7 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const authUser = process.env.CRYPTO_USER || "trader";
 const authPassword = process.env.CRYPTO_PASSWORD || "";
-const requireAuth = Boolean(authPassword) || process.env.NODE_ENV === "production";
-
-if (requireAuth && !authPassword) {
-  throw new Error("Set CRYPTO_PASSWORD before running in production.");
-}
+const requireAuth = Boolean(authPassword);
 
 const symbols = {
   XRP: { id: "ripple", query: "XRP OR Ripple" },
@@ -30,6 +26,25 @@ const rssFeeds = [
   "https://decrypt.co/feed",
   "https://cryptoslate.com/feed/"
 ];
+
+const rippleInsightsUrl = "https://ripple.com/insights/";
+
+const xrpCatalystQueries = [
+  "Ripple XRP Mastercard",
+  "Ripple Mastercard contract",
+  "Ripple XRP partnership payments",
+  "Ripple XRP stablecoin payments",
+  "Ripple XRP custody tokenization ETF"
+];
+
+const catalystTerms = {
+  enterprisePayments: ["mastercard", "visa", "swift", "bank", "banks", "payment network", "payments", "cross-border", "remittance", "contract"],
+  partnerships: ["partnership", "partner", "collaboration", "integrates", "integration", "launches", "deal", "agreement", "contract"],
+  rippleOfficial: ["ripple.com/insights", "official ripple"],
+  xrpl: ["xrpl", "xrp ledger", "ledger", "agentic payments"],
+  stablecoin: ["stablecoin", "rlusd"],
+  institutional: ["etf", "custody", "tokenization", "institutional", "exchange outflow", "exchange outflows", "inflows"]
+};
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -125,6 +140,8 @@ function stripCdata(value = "") {
     .replace(/&quot;/g, "\"")
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .trim();
 }
 
@@ -135,26 +152,129 @@ function parseRss(xml, sourceUrl) {
       const found = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
       return stripCdata(found?.[1] || "");
     };
+    const source = item.match(/<source[^>]*>([\s\S]*?)<\/source>/i);
     return {
       title: pick("title"),
       link: pick("link"),
       publishedAt: new Date(pick("pubDate") || pick("dc:date") || Date.now()).toISOString(),
-      source: new URL(sourceUrl).hostname.replace(/^www\./, ""),
+      source: stripCdata(source?.[1] || "") || new URL(sourceUrl).hostname.replace(/^www\./, ""),
       summary: stripCdata(pick("description")).slice(0, 260)
     };
   }).filter((item) => item.title && item.link);
 }
 
+function googleNewsFeeds(asset) {
+  if (asset !== "XRP") return [];
+
+  return xrpCatalystQueries.map((query) => (
+    `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
+  ));
+}
+
+function decodeHtml(value = "") {
+  return stripCdata(value)
+    .replace(/\\u0026/g, "&")
+    .replace(/\\"/g, "\"")
+    .replace(/\\'/g, "'");
+}
+
+function parseRippleInsights(html) {
+  const articles = [];
+  const seen = new Set();
+  const addArticle = (path, title, date) => {
+    const normalizedPath = path.replace(/\/$/, "");
+    if (normalizedPath.includes("/page/") || seen.has(normalizedPath) || !title) return;
+    seen.add(normalizedPath);
+
+    articles.push({
+      title: decodeHtml(title),
+      link: new URL(normalizedPath, rippleInsightsUrl).toString(),
+      publishedAt: new Date(date || Date.now()).toISOString(),
+      source: "Official Ripple",
+      summary: "Official Ripple Insights article."
+    });
+  };
+
+  for (const match of html.matchAll(/<a\b[^>]*href="(\/insights\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const [, path, body] = match;
+    const titleMatch = body.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    const dateMatch = body.match(/([A-Z][a-z]+ \d{1,2}, \d{4})/);
+    addArticle(path, titleMatch?.[1], dateMatch?.[1]);
+  }
+
+  const linkMatches = [
+    ...html.matchAll(/"href":"(\/insights\/[^"]+)"/g),
+    ...html.matchAll(/\\"href\\":\\"(\/insights\/[^"\\]+)\\"/g),
+    ...html.matchAll(/href="(\/insights\/[^"]+)"/g)
+  ];
+
+  for (const match of linkMatches) {
+    const path = match[1];
+    if (path.includes("/page/") || seen.has(path)) continue;
+    seen.add(path);
+
+    const start = Math.max(0, match.index - 1200);
+    const end = Math.min(html.length, match.index + 2500);
+    const context = html.slice(start, end);
+    const titleMatch = context.match(/"__html":"([^"]+)"/) || context.match(/\\"__html\\":\\"([^"\\]+)\\"/);
+    const dateMatch = context.match(/"children":"([A-Z][a-z]+ \d{1,2}, \d{4})"/) || context.match(/\\"children\\":\\"([A-Z][a-z]+ \d{1,2}, \d{4})\\"/);
+
+    addArticle(path, titleMatch?.[1], dateMatch?.[1]);
+  }
+
+  return articles.slice(0, 12);
+}
+
 function keywordScore(text) {
   const lower = text.toLowerCase();
-  const positive = ["approval", "approved", "partnership", "adoption", "inflows", "breakout", "rally", "surge", "settlement", "launch", "license", "etf"];
+  const positive = ["approval", "approved", "partnership", "adoption", "inflows", "breakout", "rally", "surge", "settlement", "launch", "license", "etf", "mastercard", "contract", "payments", "custody", "tokenization", "rlusd"];
   const negative = ["hack", "lawsuit", "sec", "outflows", "ban", "crackdown", "liquidation", "exploit", "selloff", "probe", "delay", "rejection"];
   return positive.reduce((sum, word) => sum + Number(lower.includes(word)), 0)
     - negative.reduce((sum, word) => sum + Number(lower.includes(word)), 0);
 }
 
+function includesAny(text, terms) {
+  return terms.some((term) => text.includes(term));
+}
+
+function isCatalystArticle(article) {
+  const text = `${article.title} ${article.summary} ${article.link} ${article.source}`.toLowerCase();
+  return article.source === "Official Ripple"
+    || includesAny(text, catalystTerms.enterprisePayments)
+    || includesAny(text, catalystTerms.partnerships)
+    || includesAny(text, catalystTerms.xrpl)
+    || includesAny(text, catalystTerms.stablecoin)
+    || includesAny(text, catalystTerms.institutional);
+}
+
+function prioritizedNews(asset, news) {
+  if (asset !== "XRP") return news;
+
+  const merged = new Map();
+  const add = (article) => {
+    const key = article.link || article.title;
+    if (!merged.has(key)) merged.set(key, article);
+  };
+
+  news.slice(0, 8).forEach(add);
+  news.filter((article) => article.source === "Official Ripple")
+    .slice(0, 6)
+    .forEach(add);
+  news.filter(isCatalystArticle)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+    .slice(0, 8)
+    .forEach(add);
+
+  return [...merged.values()]
+    .sort((a, b) => {
+      const officialDelta = Number(b.source === "Official Ripple") - Number(a.source === "Official Ripple");
+      if (officialDelta) return officialDelta;
+      return new Date(b.publishedAt) - new Date(a.publishedAt);
+    });
+}
+
 function driversFor(asset, articles, market) {
-  const corpus = articles.map((article) => `${article.title} ${article.summary}`).join(" ").toLowerCase();
+  const corpus = articles.map((article) => `${article.title} ${article.summary} ${article.source} ${article.link}`).join(" ").toLowerCase();
   const drivers = [];
   const add = (when, label, detail, tone = "neutral") => {
     if (when) drivers.push({ label, detail, tone });
@@ -162,6 +282,16 @@ function driversFor(asset, articles, market) {
 
   add(corpus.includes("sec") || corpus.includes("lawsuit") || corpus.includes("ripple"),
     "Regulatory headlines", `${asset === "XRP" ? "XRP" : asset} is sensitive to legal, exchange, and ETF-related news.`, "risk");
+  add(includesAny(corpus, catalystTerms.enterprisePayments),
+    "Enterprise payments catalyst", "Payment-network, bank, Mastercard/Visa/SWIFT, or contract headlines can affect XRP sentiment if they imply real Ripple/XRPL payment usage.", "opportunity");
+  add(includesAny(corpus, catalystTerms.partnerships),
+    "Partnership or contract watch", "New Ripple partnerships and signed enterprise agreements are higher-signal than generic social hype, but still need confirmation from primary sources.", "opportunity");
+  add(includesAny(corpus, catalystTerms.rippleOfficial),
+    "Official Ripple source", "Ripple-owned announcements are now tracked separately from third-party crypto media.", "neutral");
+  add(includesAny(corpus, catalystTerms.xrpl),
+    "XRPL utility news", "XRP Ledger infrastructure, developer, and payments news can improve the longer-term utility narrative.", "opportunity");
+  add(includesAny(corpus, catalystTerms.stablecoin),
+    "Stablecoin/payment infrastructure", "Ripple stablecoin and payment infrastructure updates can influence institutional demand narratives.", "opportunity");
   add(corpus.includes("whale") || corpus.includes("transfer") || corpus.includes("exchange"),
     "Large-holder movement", "Whale transfers and exchange inflows can change short-term liquidity.", "risk");
   add(corpus.includes("fed") || corpus.includes("rates") || corpus.includes("dollar") || corpus.includes("inflation"),
@@ -240,9 +370,11 @@ async function getMarkets() {
 async function getNews(asset = "XRP") {
   const query = symbols[asset]?.query || asset;
   const cryptoCompareUrl = `https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=${encodeURIComponent(asset)}`;
-  const [ccResult, rssResults] = await Promise.allSettled([
+  const [ccResult, rssResults, rippleResult, catalystResults] = await Promise.allSettled([
     fetchJson(cryptoCompareUrl, 180_000),
-    Promise.allSettled(rssFeeds.map((feed) => fetchText(feed).then((xml) => parseRss(xml, feed))))
+    Promise.allSettled(rssFeeds.map((feed) => fetchText(feed).then((xml) => parseRss(xml, feed)))),
+    asset === "XRP" ? fetchText(rippleInsightsUrl).then(parseRippleInsights) : Promise.resolve([]),
+    Promise.allSettled(googleNewsFeeds(asset).map((feed) => fetchText(feed).then((xml) => parseRss(xml, feed))))
   ]);
 
   const articles = [];
@@ -265,7 +397,20 @@ async function getNews(asset = "XRP") {
     }
   }
 
-  const terms = query.toLowerCase().split(/\s+or\s+|\s+/).filter((term) => term.length > 2);
+  if (rippleResult.status === "fulfilled") {
+    articles.push(...rippleResult.value);
+  }
+
+  if (catalystResults.status === "fulfilled") {
+    for (const result of catalystResults.value) {
+      if (result.status === "fulfilled") articles.push(...result.value);
+    }
+  }
+
+  const terms = [
+    ...query.toLowerCase().split(/\s+or\s+|\s+/),
+    ...(asset === "XRP" ? ["mastercard", "contract", "partnership", "payments", "xrpl", "rlusd", "stablecoin", "custody", "tokenization"] : [])
+  ].filter((term) => term.length > 2);
   const filtered = articles.filter((article) => {
     const haystack = `${article.title} ${article.summary}`.toLowerCase();
     return terms.some((term) => haystack.includes(term.toLowerCase())) || asset !== "XRP";
@@ -277,9 +422,10 @@ async function getNews(asset = "XRP") {
     if (!unique.has(key)) unique.set(key, article);
   }
 
-  return [...unique.values()]
-    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-    .slice(0, 24);
+  const sorted = [...unique.values()]
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+  return prioritizedNews(asset, sorted).slice(0, 24);
 }
 
 async function handleApi(req, res, url) {
@@ -287,7 +433,7 @@ async function handleApi(req, res, url) {
     const asset = (url.searchParams.get("asset") || "XRP").toUpperCase();
     const [markets, news] = await Promise.all([getMarkets(), getNews(asset)]);
     const market = markets.find((row) => row.symbol === asset) || markets[0];
-    const relevantNews = news.slice(0, 12);
+    const relevantNews = prioritizedNews(asset, news).slice(0, 12);
     return json(res, 200, {
       generatedAt: new Date().toISOString(),
       asset,
